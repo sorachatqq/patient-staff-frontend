@@ -160,6 +160,28 @@ StaffView.handleMessage() → setPatients() → re-render
 
 ---
 
+## Deployment (Railway)
+
+The app runs as a single Railway service — `server.ts` listens on Railway's injected `PORT`, handles WebSocket connections directly, and proxies all HTTP traffic to Next.js running internally on `NEXT_PORT`.
+
+### Setup
+
+1. Connect GitHub repo to Railway
+2. **Build** → Pre-deploy Command: `bun run build`
+3. **Deploy** → Custom Start Command: `bun run start`
+4. **Deploy** → Disable **Enable Serverless** (WebSocket requires always-on process)
+5. **Networking** → Generate Domain → port `3000`
+6. **Environment Variables**:
+
+```env
+NEXT_PORT=3001
+NEXT_PUBLIC_WS_URL=wss://your-app.up.railway.app
+```
+
+`PORT` is injected automatically by Railway — do not set it manually.
+
+---
+
 ## Scripts
 
 | Command         | Description                          |
