@@ -2,14 +2,23 @@
 import type { ServerWebSocket } from "bun";
 
 const dev = process.env.NODE_ENV !== "production";
-const WS_PORT = parseInt(process.env.WS_PORT ?? "3001", 10);
 
-// Spawn Next.js as a subprocess
-Bun.spawn(dev ? ["bun", "next", "dev"] : ["bun", "next", "start"], {
-  stdout: "inherit",
-  stderr: "inherit",
-  env: { ...process.env },
-});
+// Railway injects PORT for the public-facing port.
+// Next.js runs internally on NEXT_PORT; all other traffic is proxied to it.
+const PORT = parseInt(process.env.PORT ?? "3001", 10);
+const NEXT_PORT = parseInt(process.env.NEXT_PORT ?? "3000", 10);
+
+// Spawn Next.js as a subprocess on its own internal port
+Bun.spawn(
+  dev
+    ? ["bun", "next", "dev", "-p", String(NEXT_PORT)]
+    : ["bun", "next", "start", "-p", String(NEXT_PORT)],
+  {
+    stdout: "inherit",
+    stderr: "inherit",
+    env: { ...process.env },
+  }
+);
 
 type PatientStatus = "active" | "filling" | "updated" | "submitted" | "inactive";
 
@@ -22,13 +31,9 @@ type PatientUpdate = {
   currentStep?: number;
 };
 
-// In-memory session store: sessionId → merged PatientUpdate
 const sessions = new Map<string, PatientUpdate>();
 const clients = new Set<ServerWebSocket<unknown>>();
 
-// Clean up stale sessions periodically:
-// - submitted sessions older than 10 minutes
-// - inactive sessions older than 30 minutes
 const SESSION_TTL: Record<PatientStatus, number> = {
   submitted: 10 * 60 * 1000,
   inactive: 30 * 60 * 1000,
@@ -42,32 +47,33 @@ function cleanupSessions() {
   for (const [id, session] of sessions) {
     const ttl = SESSION_TTL[session.status];
     if (ttl === Infinity) continue;
-    const age = now - new Date(session.lastUpdated).getTime();
-    if (age > ttl) {
-      sessions.delete(id);
-    }
+    if (now - new Date(session.lastUpdated).getTime() > ttl) sessions.delete(id);
   }
 }
 
 setInterval(cleanupSessions, 60 * 1000);
 
 Bun.serve({
-  port: WS_PORT,
+  port: PORT,
   fetch(req, server) {
+    // WebSocket upgrade
     if (server.upgrade(req)) return undefined;
-    return new Response("WebSocket endpoint", { status: 200 });
+
+    // Proxy everything else to Next.js
+    const url = new URL(req.url);
+    url.hostname = "localhost";
+    url.port = String(NEXT_PORT);
+    return fetch(url.toString(), {
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
+    });
   },
   websocket: {
     open(ws) {
       clients.add(ws);
-      // Send snapshot of all active sessions to the newly connected client
       if (sessions.size > 0) {
-        ws.send(
-          JSON.stringify({
-            type: "snapshot",
-            sessions: Array.from(sessions.values()),
-          })
-        );
+        ws.send(JSON.stringify({ type: "snapshot", sessions: Array.from(sessions.values()) }));
       }
     },
 
@@ -85,7 +91,6 @@ Bun.serve({
       } catch {
         // ignore malformed messages
       }
-      // Broadcast to all other clients
       for (const client of clients) {
         if (client !== ws) client.send(msg);
       }
@@ -102,7 +107,7 @@ Bun.serve({
   },
 });
 
-console.log(`> WebSocket ready on ws://localhost:${WS_PORT}`);
+console.log(`> Server ready on port ${PORT} (Next.js internal: ${NEXT_PORT})`);
 
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => process.exit(0));
