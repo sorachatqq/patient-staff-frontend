@@ -63,10 +63,15 @@ Bun.serve({
     const url = new URL(req.url);
     url.hostname = "localhost";
     url.port = String(NEXT_PORT);
+
+    const headers = new Headers(req.headers);
+    headers.set("host", `localhost:${NEXT_PORT}`);
+    headers.delete("accept-encoding"); // prevent double-compression in proxy chain
+
     return fetch(url.toString(), {
       method: req.method,
-      headers: req.headers,
-      body: req.body,
+      headers,
+      body: req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
     });
   },
   websocket: {
