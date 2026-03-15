@@ -55,7 +55,7 @@ setInterval(cleanupSessions, 60 * 1000);
 
 Bun.serve({
   port: PORT,
-  fetch(req, server) {
+  async fetch(req, server) {
     // WebSocket upgrade
     if (server.upgrade(req)) return undefined;
 
