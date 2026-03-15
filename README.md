@@ -1,33 +1,33 @@
 # Patient Registration System
 
-A real-time patient input form and staff monitoring dashboard built with Next.js, TailwindCSS, and Pusher.
-
-## Live Demo
-
-> Add your deployed URL here after deployment.
+A real-time patient registration form with a live staff monitoring dashboard, built with Next.js, TailwindCSS v4, and native WebSockets.
 
 ---
 
 ## Features
 
-- **Patient Form** — Responsive multi-section form with full validation
-- **Staff View** — Real-time dashboard updating as patients type
-- **Status Indicators** — Filling / Submitted / Inactive states with animated indicators
-- **Progress Tracking** — Per-session fill progress bar on the staff dashboard
-- **Inactivity Detection** — Automatically marks a session inactive after 10s of no input
-- **Multi-session Support** — Staff view tracks multiple concurrent patient sessions
+- **Patient Form** — Multi-step form (4 steps) with validation and Thai address auto-fill via postal code
+- **Staff Dashboard** — Real-time monitoring of all active patient sessions
+- **5 Session Statuses** — `active` · `filling` · `updated` · `submitted` · `inactive`
+- **Instant Updates** — Every input event broadcasts immediately (no debounce)
+- **Session Persistence** — Form state saved to `sessionStorage`; survives tab refresh and role switches
+- **Inactivity Detection** — Auto-marks session inactive after 30s of no input
+- **Snapshot on Connect** — New staff clients instantly receive all current sessions on connect
+- **Patient Detail Modal** — Click any patient card in history to view full form data
+- **Field Progress Tooltip** — Hover the `x/17 fields` indicator to see which fields are missing
+- **Cross-platform Emoji** — Twemoji renders consistent SVG emoji across all OS/browsers
 
 ---
 
 ## Tech Stack
 
-| Concern   | Choice                  |
-| --------- | ----------------------- |
-| Framework | Next.js 14 (App Router) |
-| Styling   | TailwindCSS             |
-| Real-Time | Pusher Channels         |
-| Language  | TypeScript              |
-| Hosting   | Vercel                  |
+| Concern       | Choice                          |
+| ------------- | ------------------------------- |
+| Framework     | Next.js 16 (App Router)         |
+| Styling       | TailwindCSS v4 (CSS-first config) |
+| Real-Time     | Native WebSocket (`bun` server) |
+| Language      | TypeScript                      |
+| Runtime       | Bun                             |
 
 ---
 
@@ -36,149 +36,135 @@ A real-time patient input form and staff monitoring dashboard built with Next.js
 ### 1. Install dependencies
 
 ```bash
-npm install
+bun install
 ```
 
 ### 2. Configure environment variables
-
-Copy `.env.local.example` to `.env.local` and fill in your Pusher credentials:
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Get credentials by signing up at [pusher.com](https://pusher.com) → **Channels** → Create new app.
-
 ```env
-PUSHER_APP_ID=your_app_id
-PUSHER_SECRET=your_secret
-NEXT_PUBLIC_PUSHER_KEY=your_key
-NEXT_PUBLIC_PUSHER_CLUSTER=ap1
+NEXT_PUBLIC_WS_PORT=3001
+WS_PORT=3001
 ```
 
 ### 3. Run locally
 
 ```bash
-npm run dev
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+This starts both the WebSocket server (`server.ts`) and Next.js dev server concurrently.
 
----
+| URL                        | Description              |
+| -------------------------- | ------------------------ |
+| http://localhost:3000      | Landing page (role selector) |
+| http://localhost:3000/patient | Patient registration form |
+| http://localhost:3000/staff   | Staff monitoring dashboard |
 
-## Usage
-
-| Route      | Description                           |
-| ---------- | ------------------------------------- |
-| `/`        | Landing page with links to both views |
-| `/patient` | Patient registration form             |
-| `/staff`   | Staff real-time monitoring dashboard  |
-
-Open `/staff` in one tab and `/patient` in another — the staff view updates live as the patient types.
+Open `/staff` in one tab and `/patient` in another — the staff view updates live as the patient fills in the form.
 
 ---
 
 ## Project Structure
 
 ```
-patient-staff-frontend/
 ├── app/
-│   ├── layout.tsx              # Root layout, global font & styles
-│   ├── page.tsx                # Home / landing page
-│   ├── patient/
-│   │   └── page.tsx            # Patient portal page
-│   ├── staff/
-│   │   └── page.tsx            # Staff dashboard page
-│   └── api/
-│       └── patient-update/
-│           └── route.ts        # POST endpoint — triggers Pusher event
+│   ├── (portal)/
+│   │   ├── error.tsx           # Error boundary for portal routes
+│   │   ├── layout.tsx          # Portal layout (sidebar + header + SocketProvider)
+│   │   ├── patient/
+│   │   │   ├── loading.tsx     # Skeleton UI while patient page loads
+│   │   │   └── page.tsx
+│   │   └── staff/
+│   │       ├── loading.tsx     # Skeleton UI while staff page loads
+│   │       └── page.tsx
+│   ├── global-error.tsx        # Root-level error boundary (replaces root layout)
+│   ├── layout.tsx              # Root layout (font, metadata)
+│   ├── not-found.tsx           # 404 page
+│   └── page.tsx                # Landing page
+│
 ├── components/
-│   ├── PatientForm.tsx         # Form with validation & real-time broadcast
-│   └── StaffView.tsx           # Live dashboard subscribing to Pusher
+│   ├── layout/
+│   │   ├── Sidebar.tsx         # Collapsible navigation sidebar
+│   │   └── TopHeader.tsx       # Mobile top header with menu toggle
+│   ├── patient/
+│   │   ├── AddressFields.tsx   # Thai postal code → sub-district/district/province auto-fill
+│   │   └── PatientForm.tsx     # Multi-step registration form with real-time broadcast
+│   ├── staff/
+│   │   └── StaffView.tsx       # Live patient session dashboard with modal detail view
+│   └── ui/
+│       ├── ErrorView.tsx       # Shared error UI (used by error.tsx + global-error.tsx)
+│       └── Twemoji.tsx         # Cross-platform SVG emoji renderer
+│
 ├── lib/
-│   ├── pusher.ts               # Server-side Pusher instance
-│   └── pusher-client.ts        # Client-side Pusher instance
+│   ├── design-system.ts        # Centralized class tokens (colors, variants, badges)
+│   ├── thai-address.ts         # Thai address data utilities
+│   └── use-socket.tsx          # SocketProvider context + useSocket hook
+│
+├── styles/
+│   └── globals.css             # Tailwind v4 CSS-first config (@theme tokens)
+│
 ├── types/
 │   └── patient.ts              # Shared TypeScript types
-├── .env.local.example          # Environment variable template
-└── README.md
+│
+├── server.ts                   # Bun WebSocket server + Next.js subprocess launcher
+├── tsconfig.json               # Next.js TypeScript config
+└── tsconfig.server.json        # Bun-specific TypeScript config (for server.ts)
 ```
 
 ---
 
-## Design Decisions
+## Architecture
 
-### Responsive Layout
-
-- Mobile-first grid: single column on small screens, two columns on `sm+`
-- Sticky nav bar on both pages for easy back-navigation
-- Patient cards on the staff view use a scrollable field list to avoid overflow
-
-### Component Architecture
-
-**`PatientForm`**
-
-- Controlled form with `useState` for all fields
-- Debounce-free: broadcasts on every field change via `useEffect` watching `formData`
-- Inactivity timer (10s) auto-sets status to `inactive` and broadcasts
-- Client-side validation runs on submit; per-field error messages appear inline
-
-**`StaffView`**
-
-- Subscribes to `patient-channel` on mount, unsubscribes on unmount
-- Merges incoming partial `formData` into existing session state (accumulates all fields)
-- Sessions sorted by `lastUpdated` descending (most recent first)
-- A 10-second `setInterval` ticks to refresh relative timestamps (`"just now"`, `"2m ago"`)
-
-### Real-Time Synchronization Flow
+### Real-Time Flow
 
 ```
 Patient types a field
-      │
-      ▼
-handleChange() updates local state
-      │
-      ▼
-useEffect fires → POST /api/patient-update
-      │
-      ▼
-API route calls pusherServer.trigger("patient-channel", "patient-update", payload)
-      │
-      ▼
-Pusher broadcasts to all subscribers on "patient-channel"
-      │
-      ▼
-StaffView channel.bind("patient-update") merges data into patients map
-      │
-      ▼
-React re-renders PatientCard with updated fields
+        │
+        ▼
+handleChange() → broadcastNow(newData, status)
+        │
+        ▼
+SocketProvider.send() ─→ updates local snapshot cache
+        │                        │
+        ▼                        ▼
+WebSocket server          notify local listeners
+merges into session       (same-tab role switch: instant)
+store, broadcasts to
+all OTHER clients
+        │
+        ▼
+StaffView.handleMessage() → setPatients() → re-render
 ```
 
-Each broadcast payload includes:
+### Session Statuses
 
-- `sessionId` — unique per browser session (used as map key)
-- `formData` — partial object with only current field values
-- `status` — `"filling"` | `"submitted"` | `"inactive"`
-- `lastUpdated` — ISO timestamp
+| Status      | Trigger                                              |
+| ----------- | ---------------------------------------------------- |
+| `active`    | Patient has the form open but is idle                |
+| `filling`   | Patient is actively typing in a text field           |
+| `updated`   | Patient changed a select or date field               |
+| `submitted` | Patient completed and submitted the form             |
+| `inactive`  | 30s of inactivity, tab hidden, or patient navigated away |
 
----
+### WebSocket Snapshot Cache
 
-## Deployment on Vercel
+`SocketProvider` caches the latest server snapshot in memory. When any component registers a new listener (e.g. StaffView navigating to the page), it immediately receives the cached snapshot — no round-trip to the server needed. Outgoing `patient-update` messages also update the cache and notify existing listeners, so same-tab role switches reflect the latest status instantly.
 
-1. Push repository to GitHub
-2. Import project in [vercel.com](https://vercel.com)
-3. Add environment variables in **Project Settings → Environment Variables**:
-   - `PUSHER_APP_ID`
-   - `PUSHER_SECRET`
-   - `NEXT_PUBLIC_PUSHER_KEY`
-   - `NEXT_PUBLIC_PUSHER_CLUSTER`
-4. Deploy — Vercel auto-detects Next.js
+### Session Persistence
+
+`PatientForm` saves `{ sessionId, formData, currentStep, maxStep }` to `sessionStorage` on every change. On mount, it restores from storage if available. On submit, storage is cleared. On unmount (navigation), it broadcasts `inactive` and the session is recoverable if the patient returns.
 
 ---
 
-## Bonus Features
+## Scripts
 
-- **Progress bar** per patient session showing % of fields filled
-- **Multi-session** support — unlimited concurrent patients, each tracked independently
-- **Patient name display** in staff card header once name fields are filled
-- **Inactivity auto-detection** — 10s timeout marks session inactive and notifies staff
+| Command         | Description                          |
+| --------------- | ------------------------------------ |
+| `bun run dev`   | Start dev server (WS + Next.js)      |
+| `bun run build` | Build Next.js for production         |
+| `bun run start` | Start production server              |
+| `bun run lint`  | Run ESLint on `app/`, `components/`, `lib/` |
