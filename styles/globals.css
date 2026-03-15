@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@theme {
+  --font-family-sans: var(--font-inter);
+
+  --color-brand-purple:   #6367FF;
+  --color-brand-lavender: #8494FF;
+  --color-brand-soft:     #C9BEFF;
+  --color-brand-mist:     #e5e4f7;
+}
