@@ -66,12 +66,23 @@ Bun.serve({
 
     const headers = new Headers(req.headers);
     headers.set("host", `localhost:${NEXT_PORT}`);
-    headers.delete("accept-encoding"); // prevent double-compression in proxy chain
+    headers.delete("accept-encoding");
 
-    return fetch(url.toString(), {
+    const nextRes = await fetch(url.toString(), {
       method: req.method,
       headers,
       body: req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
+    });
+
+    // Bun auto-decompresses the response body, so we must strip Content-Encoding
+    // before returning to avoid the browser trying to decompress already-decoded content
+    const resHeaders = new Headers(nextRes.headers);
+    resHeaders.delete("content-encoding");
+    resHeaders.delete("transfer-encoding");
+
+    return new Response(nextRes.body, {
+      status: nextRes.status,
+      headers: resHeaders,
     });
   },
   websocket: {
